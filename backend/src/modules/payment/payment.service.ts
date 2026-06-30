@@ -47,63 +47,6 @@ class RazorPayService {
     return generatedSignature === data.razorpay_signature;
   }
 
-  static async handleWebhook(body: Buffer, signature: string) {
-    const payload = body.toString("utf8");
-
-    const verified = RazorPayService.verifyWebhookSignature(payload, signature);
-
-    if (!verified) {
-      throw new ApiError(
-        HttpStatusCode.BAD_REQUEST,
-        "Invalid Razorpay webhook signature."
-      );
-    }
-
-    let event: any;
-
-    try {
-      event = JSON.parse(payload);
-    } catch {
-      throw new ApiError(
-        HttpStatusCode.BAD_REQUEST,
-        "Invalid webhook JSON payload."
-      );
-    }
-
-    if (!event?.event) {
-      throw new ApiError(
-        HttpStatusCode.BAD_REQUEST,
-        "Invalid webhook payload."
-      );
-    }
-
-    const payment = event.payload?.payment?.entity;
-    const refund = event.payload?.refund?.entity;
-
-    console.log({
-      event: event.event,
-      refund,
-      payment,
-      account: event.account_id,
-      createdAt: event.created_at,
-    });
-
-    const eventKey = event.event as keyof typeof RazorPayService.handlers;
-    const handler = this.handlers[eventKey] as
-      | ((payload: any) => Promise<void>)
-      | undefined;
-
-    if (handler) {
-      if (event.event.startsWith("payment.")) {
-        await handler.call(this, payment);
-      } else if (event.event.startsWith("refund.")) {
-        await handler.call(this, refund);
-      } else {
-        console.warn(`Unhandled Razorpay event: ${event.event}`);
-      }
-    }
-  }
-
   static verifyWebhookSignature(payload: string, signature: string): boolean {
     const expectedSignature = crypto
       .createHmac("sha256", envConfig.razorpay.webhookSecret)
@@ -118,6 +61,42 @@ class RazorPayService {
     }
 
     return crypto.timingSafeEqual(expected, received);
+  }
+
+  static async handleWebhook(body: Buffer, signature: string) {
+    console.log("Step 1");
+
+    const payload = body.toString("utf8");
+
+    console.log("Step 2");
+
+    const verified = RazorPayService.verifyWebhookSignature(payload, signature);
+
+    console.log("Step 3", verified);
+
+    if (!verified) {
+      throw new ApiError(
+        HttpStatusCode.BAD_REQUEST,
+        "Invalid Razorpay webhook signature."
+      );
+    }
+
+    console.log("Step 4");
+
+    let event;
+
+    try {
+      event = JSON.parse(payload);
+      console.log("Step 5");
+    } catch (e) {
+      console.error(e);
+      throw new ApiError(
+        HttpStatusCode.BAD_REQUEST,
+        "Invalid webhook JSON payload."
+      );
+    }
+
+    console.log(event);
   }
 
   static async refundPayment(paymentId: string, amount?: number) {

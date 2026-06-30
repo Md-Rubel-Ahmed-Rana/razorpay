@@ -14,6 +14,7 @@ class Controller extends BaseController {
   });
 
   handleWebhook = this.catchAsync(async (req, res) => {
+    console.log({ "razorpay-signature": req.headers["x-razorpay-signature"] });
     const signature = req.headers["x-razorpay-signature"];
 
     if (!signature || typeof signature !== "string") {
