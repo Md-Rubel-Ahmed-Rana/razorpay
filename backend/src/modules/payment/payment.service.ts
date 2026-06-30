@@ -55,6 +55,7 @@ class RazorPayService {
 
     const expected = Buffer.from(expectedSignature);
     const received = Buffer.from(signature);
+    console.log({ expectedSignature, expected, received });
 
     if (expected.length !== received.length) {
       return false;
@@ -64,6 +65,7 @@ class RazorPayService {
   }
 
   static async handleWebhook(body: Buffer, signature: string) {
+    console.log({ razorpayCredentials: envConfig.razorpay.webhookSecret });
     console.log("Step 1");
 
     const payload = body.toString("utf8");
