@@ -6,86 +6,105 @@ import { HttpStatusCode } from "@/lib/httpStatus";
 import validateWebhookSignature from "razorpay/dist/utils/razorpay-utils";
 
 class RazorPayService {
-  static async createOrder(
-    amount: number,
-    receipt: string,
-    notes?: Record<string, string>
-  ) {
-    return await razorpay.orders.create({
-      amount: amount * 100, // Razorpay expects the smallest currency unit (paise)
-      currency: "INR",
-      receipt,
-      notes,
-    });
+  static async checkout(order: any) {
+    try {
+      const razorpayOrder = await razorpay.orders.create({
+        amount: order?.total * 100,
+        currency: order?.currency || "INR",
+        receipt: order?.order_number,
+        notes: order.notes,
+      });
+      return {
+        key: envConfig.razorpay.keyId,
+        orderId: razorpayOrder.id,
+        amount: razorpayOrder?.amount || 55,
+        currency: razorpayOrder?.currency || "INR",
+        name: order?.shipping_address?.name || "RazorPay Test Payment",
+        description: "Order Payment",
+        prefill: {
+          name: order?.shipping_address?.name || "Rubel",
+          email: order?.shipping_address?.email || "rubel@gmail.com",
+          contact: order?.shipping_address?.phone || "phone number",
+        },
+        notes: razorpayOrder?.notes || { note: "This is note" },
+      };
+    } catch (error) {
+      console.log(error);
+      throw new ApiError(HttpStatusCode.BAD_REQUEST, "Failed to checkout.");
+    }
   }
 
-  static async fetchPayment(paymentId: string) {
+  private static async fetchPayment(paymentId: string) {
     return await razorpay.payments.fetch(paymentId);
   }
 
-  static async fetchOrder(orderId: string) {
-    return await razorpay.orders.fetch(orderId);
+  static async getOrder(orderId: string) {
+    const order = await razorpay.orders.fetch(orderId);
+
+    return {
+      id: order.id,
+
+      receipt: order.receipt,
+
+      status: order.status,
+
+      amount: (order.amount as number) / 100,
+
+      currency: order.currency,
+
+      amountPaid: order.amount_paid / 100,
+
+      amountDue: order.amount_due / 100,
+
+      attempts: order.attempts,
+
+      createdAt: new Date(order.created_at * 1000).toISOString(),
+
+      notes: {
+        orderId: order.notes?.orderId ?? null,
+        customerId: order.notes?.customerId ?? null,
+      },
+    };
   }
 
-  private static readonly handlers = {
-    "payment.authorized": this.handlePaymentAuthorized,
-    "payment.captured": this.handlePaymentCaptured,
-    "payment.failed": this.handlePaymentFailed,
-    "refund.created": this.handleRefundCreated,
-    "refund.processed": this.handleRefundProcessed,
-  };
-
-  static verifyPaymentSignature(data: {
+  static async verify(payload: {
     razorpay_order_id: string;
     razorpay_payment_id: string;
     razorpay_signature: string;
   }) {
     const generatedSignature = crypto
       .createHmac("sha256", envConfig.razorpay.keySecret)
-      .update(`${data.razorpay_order_id}|${data.razorpay_payment_id}`)
+      .update(`${payload.razorpay_order_id}|${payload.razorpay_payment_id}`)
       .digest("hex");
 
-    return generatedSignature === data.razorpay_signature;
+    const verified = generatedSignature === payload.razorpay_signature;
+
+    if (!verified) {
+      throw new ApiError(
+        HttpStatusCode.BAD_REQUEST,
+        "Payment verification failed."
+      );
+    }
+
+    const payment = await this.fetchPayment(payload.razorpay_payment_id);
+
+    if (payment.status !== "captured") {
+      throw new ApiError(HttpStatusCode.BAD_REQUEST, "Payment not captured.");
+    }
+
+    return {
+      paymentId: payment,
+    };
   }
 
-  static verifyWebhookSignature(payload: string, signature: string): boolean {
-    // this method is from "razorpay/dist/utils/razorpay-utils"
-    const isValid = validateWebhookSignature.validateWebhookSignature(
+  static async handleWebhook(body: Buffer, signature: string) {
+    const payload = body.toString("utf8");
+
+    const verified = validateWebhookSignature.validateWebhookSignature(
       payload,
       signature,
       envConfig.razorpay.webhookSecret
     );
-    console.log({ isValidSignature: isValid });
-    const expectedSignature = crypto
-      .createHmac("sha256", envConfig.razorpay.webhookSecret)
-      .update(payload)
-      .digest("hex");
-
-    const expected = Buffer.from(expectedSignature);
-    const received = Buffer.from(signature);
-    console.log({ expectedSignature, expected, received });
-
-    if (expected.length !== received.length) {
-      return false;
-    }
-
-    return crypto.timingSafeEqual(expected, received);
-  }
-
-  static async handleWebhook(body: Buffer, signature: string) {
-    console.log({ isBuffer: body instanceof Buffer });
-    console.log({ bodyLength: body.length });
-    console.log({ bodyString: body.toString("utf8") });
-    console.log({ razorpayCredentials: envConfig.razorpay.webhookSecret });
-    console.log("Step 1");
-
-    const payload = body.toString("utf8");
-
-    console.log("Step 2");
-
-    const verified = RazorPayService.verifyWebhookSignature(payload, signature);
-
-    console.log("Step 3", verified);
 
     if (!verified) {
       throw new ApiError(
@@ -94,13 +113,11 @@ class RazorPayService {
       );
     }
 
-    console.log("Step 4");
-
     let event;
 
     try {
       event = JSON.parse(payload);
-      console.log("Step 5");
+      console.log(event);
     } catch (e) {
       console.error(e);
       throw new ApiError(
@@ -108,34 +125,6 @@ class RazorPayService {
         "Invalid webhook JSON payload."
       );
     }
-
-    console.log(event);
-  }
-
-  static async refundPayment(paymentId: string, amount?: number) {
-    return await razorpay.payments.refund(paymentId, {
-      amount: amount ? amount * 100 : undefined,
-    });
-  }
-
-  static async handlePaymentAuthorized(payment: any) {
-    console.log(payment.id);
-  }
-
-  static async handlePaymentCaptured(payment: any) {
-    console.log(payment.id);
-  }
-
-  static async handlePaymentFailed(payment: any) {
-    console.log(payment.id);
-  }
-
-  static async handleRefundCreated(refund: any) {
-    console.log(refund.id);
-  }
-
-  static async handleRefundProcessed(refund: any) {
-    console.log(refund.id);
   }
 }
 
