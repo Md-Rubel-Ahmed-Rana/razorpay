@@ -49,6 +49,7 @@ class RazorPayService {
   }
 
   static verifyWebhookSignature(payload: string, signature: string): boolean {
+    // this method is from "razorpay/dist/utils/razorpay-utils"
     const isValid = validateWebhookSignature.validateWebhookSignature(
       payload,
       signature,
