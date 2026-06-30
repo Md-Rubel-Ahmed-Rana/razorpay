@@ -2,13 +2,32 @@ import BaseController from "@/shared/baseController";
 import PaymentService from "./payment.service";
 
 class Controller extends BaseController {
-  createOrder = this.catchAsync(async (req, res) => {
-    const { amount, receipt, notes } = req.body;
-    const result = await PaymentService.createOrder(amount, receipt, notes);
+  checkout = this.catchAsync(async (req, res) => {
+    const result = await PaymentService.checkout(req.body);
     this.sendResponse(res, {
       success: true,
-      statusCode: 201,
-      message: "Payment order created successfully.",
+      statusCode: 200,
+      message: "Checkout created successfully.",
+      data: result,
+    });
+  });
+
+  verify = this.catchAsync(async (req, res) => {
+    const result = await PaymentService.verify(req.body);
+    this.sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: "Payment verified successfully.",
+      data: result,
+    });
+  });
+
+  getOrder = this.catchAsync(async (req, res) => {
+    const result = await PaymentService.getOrder(req.params.orderId);
+    this.sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: "Payment retrieved successfully.",
       data: result,
     });
   });
