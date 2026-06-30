@@ -10,18 +10,11 @@ export const expressMiddlewares = (app: Application) => {
   app.use(cors(corsOptions));
   app.use(cookieParser());
   app.use(helmet());
-  // Allow 100MB to be uploaded
+
   // 🔥 RazorPay webhook raw-body exception MUST be first
-  const webhookPaths = ["/api/v1/payment/webhook"];
+  app.use("/api/v1/payment/webhook", express.raw({ type: "application/json" }));
 
-  app.use((req, res, next) => {
-    if (webhookPaths.includes(req.path)) {
-      next();
-    } else {
-      express.json({ limit: "100mb" })(req, res, next);
-    }
-  });
-
+  app.use(express.json({ limit: "100mb" }));
   app.use(express.urlencoded({ extended: true, limit: "100mb" }));
   app.use(morgan("dev"));
 };
