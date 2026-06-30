@@ -3,6 +3,7 @@ import razorpay from "@/config/razorpay";
 import { envConfig } from "@/config/index";
 import ApiError from "@/middlewares/error";
 import { HttpStatusCode } from "@/lib/httpStatus";
+import validateWebhookSignature from "razorpay/dist/utils/razorpay-utils";
 
 class RazorPayService {
   static async createOrder(
@@ -48,6 +49,12 @@ class RazorPayService {
   }
 
   static verifyWebhookSignature(payload: string, signature: string): boolean {
+    const isValid = validateWebhookSignature.validateWebhookSignature(
+      payload,
+      signature,
+      envConfig.razorpay.webhookSecret
+    );
+    console.log({ isValidSignature: isValid });
     const expectedSignature = crypto
       .createHmac("sha256", envConfig.razorpay.webhookSecret)
       .update(payload)
@@ -65,6 +72,9 @@ class RazorPayService {
   }
 
   static async handleWebhook(body: Buffer, signature: string) {
+    console.log({ isBuffer: body instanceof Buffer });
+    console.log({ bodyLength: body.length });
+    console.log({ bodyString: body.toString("utf8") });
     console.log({ razorpayCredentials: envConfig.razorpay.webhookSecret });
     console.log("Step 1");
 

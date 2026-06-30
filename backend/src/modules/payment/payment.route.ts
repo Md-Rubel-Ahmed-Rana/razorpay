@@ -1,4 +1,4 @@
-import express, { Router } from "express";
+import { Router } from "express";
 import validateRequest from "@/middlewares/validateRequest";
 import { createOrderValidation } from "./payment.validation";
 import { PaymentController } from "./payment.controller";
@@ -11,12 +11,6 @@ router.post(
   PaymentController.createOrder
 );
 
-router.post(
-  "/webhook",
-  express.raw({
-    type: "application/json",
-  }),
-  PaymentController.handleWebhook
-);
+router.post("/webhook", PaymentController.handleWebhook);
 
 export const PaymentRoutes = router;
