@@ -8,9 +8,9 @@
   "author": "",
   "license": "ISC",
   "scripts": {
-    "build": "tsc && tsc-alias",
-    "start": "node -r tsconfig-paths/register dist/server.js",
-    "dev": "ts-node-dev --respawn --transpile-only -r tsconfig-paths/register src/server.ts",
+    "build": "node init && tsc && tsc-alias",
+    "start": "node init && node -r tsconfig-paths/register dist/server.js",
+    "dev": "node init && ts-node-dev --respawn --transpile-only -r tsconfig-paths/register src/server.ts",
     "docker:build": "docker-compose build",
     "docker:start": "docker-compose up -d",
     "docker:stop": "docker-compose down"
