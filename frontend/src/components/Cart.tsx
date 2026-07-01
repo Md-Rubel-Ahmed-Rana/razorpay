@@ -35,19 +35,21 @@ const Cart = () => {
   return (
     <section className="min-h-screen bg-slate-100 py-10">
       <div className="mx-auto max-w-7xl px-5">
-        <div className="mb-10 flex items-center justify-between">
+        <div className="flex items-center justify-between">
           <h1 className="mb-8 text-3xl font-bold text-slate-900">
             Shopping Cart
           </h1>
-          <button>
-            <span className="text-lg font-semibold bg-amber-50 rounded-lg px-4 py-2 text-slate-900 transition hover:bg-amber-100">
-              <Link href="/">Back</Link>
-            </span>
-          </button>
+          {cartProducts.length > 0 && (
+            <button>
+              <span className="text-lg font-semibold bg-amber-50 rounded-lg px-4 py-2 text-slate-900 transition hover:bg-amber-100">
+                <Link href="/">Back</Link>
+              </span>
+            </button>
+          )}
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-[2fr_1fr]">
-          <div className="space-y-5">
+        <div className="grid gap-2 lg:grid-cols-[2fr_1fr]">
+          <div className="space-y-2">
             {cartProducts.length === 0 && (
               <div className="rounded-2xl bg-white p-16 text-center shadow-sm">
                 <h2 className="text-2xl font-semibold">Your cart is empty</h2>
@@ -55,6 +57,10 @@ const Cart = () => {
                 <p className="mt-2 text-slate-500">
                   Add some products to continue shopping.
                 </p>
+
+                <button className="mt-6 rounded-lg bg-blue-600 px-5 py-2 text-white transition hover:bg-blue-700">
+                  <Link href="/">Continue Shopping</Link>
+                </button>
               </div>
             )}
 
@@ -105,40 +111,42 @@ const Cart = () => {
             ))}
           </div>
 
-          <div className="h-fit rounded-2xl bg-white p-6 shadow-sm lg:sticky lg:top-6">
-            <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
+          {cartProducts.length > 0 && (
+            <div className="h-fit rounded-2xl bg-white p-6 shadow-sm lg:sticky lg:top-6">
+              <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
-            <div className="space-y-4">
-              <Row label="Items" value={cartProducts.length.toString()} />
+              <div className="space-y-4">
+                <Row label="Items" value={cartProducts.length.toString()} />
 
-              <Row label="Subtotal" value={`₹${subtotal.toLocaleString()}`} />
+                <Row label="Subtotal" value={`₹${subtotal.toLocaleString()}`} />
 
-              <Row
-                label="Shipping"
-                value={
-                  shipping === 0 ? "Free" : `₹${shipping.toLocaleString()}`
-                }
-              />
+                <Row
+                  label="Shipping"
+                  value={
+                    shipping === 0 ? "Free" : `₹${shipping.toLocaleString()}`
+                  }
+                />
 
-              <Row label="Tax (5%)" value={`₹${tax.toLocaleString()}`} />
+                <Row label="Tax (5%)" value={`₹${tax.toLocaleString()}`} />
 
-              <hr />
+                <hr />
 
-              <div className="flex items-center justify-between text-xl font-bold">
-                <span>Total</span>
+                <div className="flex items-center justify-between text-xl font-bold">
+                  <span>Total</span>
 
-                <span>₹{total.toLocaleString()}</span>
+                  <span>₹{total.toLocaleString()}</span>
+                </div>
               </div>
-            </div>
 
-            <div className="mt-6 flex justify-center w-full">
-              <Checkout products={cartProducts} />
-            </div>
+              <div className="mt-6 flex justify-center w-full">
+                <Checkout products={cartProducts} />
+              </div>
 
-            <p className="mt-4 text-center text-sm text-slate-500">
-              Secure checkout powered by Razorpay
-            </p>
-          </div>
+              <p className="mt-4 text-center text-sm text-slate-500">
+                Secure checkout powered by Razorpay
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </section>
