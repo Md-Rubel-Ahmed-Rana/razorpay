@@ -4,9 +4,16 @@ import { envConfig } from "@/config/index";
 import ApiError from "@/middlewares/error";
 import { HttpStatusCode } from "@/lib/httpStatus";
 import validateWebhookSignature from "razorpay/dist/utils/razorpay-utils";
+import { OrderModel } from "../order/order.model";
 
 class RazorPayService {
-  static async checkout(order: any) {
+  static async checkout(order: {
+    total: number;
+    currency: string;
+    order_number: string; // Unique order number for the order
+    notes?: { [key: string]: string }; // Optional notes for the order, backend should inject more details like orderId, customerId, etc. into this notes object
+    description?: string; // Optional description for the order
+  }) {
     try {
       const razorpayOrder = await razorpay.orders.create({
         amount: order?.total * 100,
@@ -16,17 +23,11 @@ class RazorPayService {
       });
       return {
         key: envConfig.razorpay.keyId,
-        orderId: razorpayOrder.id,
-        amount: razorpayOrder?.amount || 55,
+        razorpay_order_id: razorpayOrder.id,
+        amount: razorpayOrder?.amount ? Number(razorpayOrder.amount) / 100 : 3,
         currency: razorpayOrder?.currency || "INR",
-        name: order?.shipping_address?.name || "RazorPay Test Payment",
-        description: "Order Payment",
-        prefill: {
-          name: order?.shipping_address?.name || "Rubel",
-          email: order?.shipping_address?.email || "rubel@gmail.com",
-          contact: order?.shipping_address?.phone || "phone number",
-        },
-        notes: razorpayOrder?.notes || { note: "This is note" },
+        description: order?.description || "Payment for order",
+        notes: razorpayOrder?.notes,
       };
     } catch (error) {
       console.log(error);
@@ -72,6 +73,18 @@ class RazorPayService {
     razorpay_payment_id: string;
     razorpay_signature: string;
   }) {
+    // retrieve the order from the database using the razorpay_order_id
+    const order = await OrderModel.findOne({
+      "payment_details.razorpay_order_id": payload.razorpay_order_id,
+    });
+
+    if (!order) {
+      throw new ApiError(
+        HttpStatusCode.NOT_FOUND,
+        "Order not found for the given Razorpay Order ID."
+      );
+    }
+
     const generatedSignature = crypto
       .createHmac("sha256", envConfig.razorpay.keySecret)
       .update(`${payload.razorpay_order_id}|${payload.razorpay_payment_id}`)
@@ -92,8 +105,19 @@ class RazorPayService {
       throw new ApiError(HttpStatusCode.BAD_REQUEST, "Payment not captured.");
     }
 
+    // update the order with the payment details
+    order.payment_details = {
+      razorpay_order_id: payload.razorpay_order_id,
+      razorpay_payment_id: payload.razorpay_payment_id,
+      razorpay_signature: payload.razorpay_signature,
+      payment_status: "captured",
+      paid_at: new Date(),
+    };
+
+    await order.save();
+
     return {
-      paymentId: payment,
+      paymentId: payload.razorpay_payment_id,
     };
   }
 
@@ -117,7 +141,13 @@ class RazorPayService {
 
     try {
       event = JSON.parse(payload);
-      console.log(event);
+      const handler = this.razorpayHandlers[event.event];
+
+      if (!handler) {
+        return;
+      }
+
+      await handler.call(this, event);
     } catch (e) {
       console.error(e);
       throw new ApiError(
@@ -125,6 +155,145 @@ class RazorPayService {
         "Invalid webhook JSON payload."
       );
     }
+  }
+
+  private static readonly razorpayHandlers: any = {
+    "payment.authorized": this.handlePaymentAuthorized,
+    "payment.captured": this.handlePaymentCaptured,
+    "payment.failed": this.handlePaymentFailed,
+    "refund.created": this.handleRefundCreated,
+    "refund.processed": this.handleRefundProcessed,
+    "refund.failed": this.handleRefundFailed,
+    "order.paid": this.handleOrderPaid,
+  };
+
+  private static async handlePaymentCaptured(event: any) {
+    const payment = event.payload.payment.entity;
+
+    const order = await OrderModel.findOne({
+      "payment_details.razorpay_order_id": payment.order_id,
+    });
+
+    if (!order) {
+      return;
+    }
+
+    if (order.status === "paid") {
+      return;
+    }
+
+    order.status = "paid";
+
+    order.payment_details = {
+      razorpay_order_id: payment.order_id,
+      razorpay_payment_id: payment.id,
+      razorpay_signature: order.payment_details?.razorpay_signature,
+
+      payment_method: payment.method,
+
+      payment_status: payment.status,
+
+      paid_at: new Date(payment.created_at * 1000),
+    };
+
+    order.raw_payment_response = payment;
+
+    await order.save();
+
+    return {
+      message: "Payment captured and order marked as paid.",
+    };
+  }
+
+  private static async handlePaymentFailed(event: any) {
+    const payment = event.payload.payment.entity;
+
+    const order = await OrderModel.findOne({
+      "payment_details.razorpay_order_id": payment.order_id,
+    });
+
+    if (!order) {
+      return;
+    }
+
+    order.status = "failed";
+
+    order.payment_details = {
+      ...order.payment_details,
+
+      razorpay_payment_id: payment.id,
+
+      payment_method: payment.method,
+
+      payment_status: payment.status,
+    };
+
+    await order.save();
+  }
+
+  private static async handlePaymentAuthorized(event: any) {
+    const payment = event.payload.payment.entity;
+
+    const order = await OrderModel.findOne({
+      "payment_details.razorpay_order_id": payment.order_id,
+    });
+
+    if (!order) {
+      return;
+    }
+
+    order.payment_details = {
+      ...order.payment_details,
+
+      razorpay_payment_id: payment.id,
+
+      payment_method: payment.method,
+
+      payment_status: payment.status,
+    };
+
+    await order.save();
+  }
+
+  private static async handleRefundCreated(event: any) {
+    const refund = event.payload.refund.entity;
+
+    console.log("Refund Created", refund.id);
+  }
+
+  private static async handleRefundProcessed(event: any) {
+    const refund = event.payload.refund.entity;
+
+    console.log("Refund Processed", refund.id);
+  }
+
+  private static async handleRefundFailed(event: any) {
+    const refund = event.payload.refund.entity;
+
+    console.log("Refund Failed", refund.id);
+  }
+
+  private static async handleOrderPaid(event: any) {
+    console.log("Order Paid", event.payload.order.entity.id);
+
+    const order = await OrderModel.findOne({
+      "payment_details.razorpay_order_id": event.payload.order.entity.id,
+    });
+
+    if (!order) {
+      return;
+    }
+
+    if (order.status === "paid") {
+      return;
+    }
+
+    order.status = "paid";
+    await order.save();
+
+    return {
+      message: "Order marked as paid.",
+    };
   }
 }
 

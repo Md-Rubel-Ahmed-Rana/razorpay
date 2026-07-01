@@ -1,3 +1,4 @@
+import { OrderRoutes } from "@/modules/order/order.route";
 import { PaymentRoutes } from "@/modules/payment/payment.route";
 import { Router } from "express";
 
@@ -7,6 +8,10 @@ const routes: { path: string; route: Router }[] = [
   {
     path: "/payment",
     route: PaymentRoutes,
+  },
+  {
+    path: "/order",
+    route: OrderRoutes,
   },
 ];
 

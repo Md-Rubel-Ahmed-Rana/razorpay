@@ -1,30 +1,14 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { useState } from "react";
 import axios from "axios";
-
 import { envConfig } from "@/config/env";
 import loadRazorpay from "@/config/razorpay";
-import { demoOrderData } from "@/constants/demo-order-data";
 import { useRouter } from "next/router";
-
-type CheckoutSession = {
-  key: string;
-  orderId: string;
-  amount: number;
-  currency: string;
-
-  name: string;
-  description?: string;
-
-  prefill?: {
-    name?: string;
-    email?: string;
-    contact?: string;
-  };
-
-  notes?: Record<string, string>;
-};
+import {
+  ICreateOrder,
+  IOrderResponse,
+  IShippingAddress,
+} from "@/types/order.type";
+import { IProduct } from "@/types/product.type";
 
 type PaymentSuccessResponse = {
   razorpay_order_id: string;
@@ -32,12 +16,35 @@ type PaymentSuccessResponse = {
   razorpay_signature: string;
 };
 
-const Checkout = () => {
+const shippingAddress: IShippingAddress = {
+  name: "Md Rubel Ahmed Rana",
+
+  phone: "+919876543210",
+
+  email: "rubel.ahmed@gmail.com",
+
+  address: "House 25, Road 3",
+
+  city: "Kolkata",
+
+  state: "West Bengal",
+
+  postal_code: "700001",
+
+  country: "India",
+};
+
+type Props = {
+  products: IProduct[];
+};
+
+const Checkout = ({ products }: Props) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("Processing...");
   const router = useRouter();
 
   const startCheckout = async (
-    session: CheckoutSession,
+    session: IOrderResponse,
   ): Promise<PaymentSuccessResponse> => {
     const loaded = await loadRazorpay();
 
@@ -47,7 +54,8 @@ const Checkout = () => {
 
     if (!session.key) throw new Error("Missing Razorpay Key.");
 
-    if (!session.orderId) throw new Error("Missing Razorpay Order ID.");
+    if (!session.razorpay_order_id)
+      throw new Error("Missing Razorpay Order ID.");
 
     if (!session.amount) throw new Error("Missing Payment Amount.");
 
@@ -58,17 +66,21 @@ const Checkout = () => {
         key: session.key,
         amount: session.amount,
         currency: session.currency,
-        order_id: session.orderId,
-        name: session.name,
+        order_id: session.razorpay_order_id,
+        name: session.customer_name,
         description: session.description,
-        prefill: session.prefill,
+        prefill: {
+          name: session.customer_name,
+          email: session.customer_email,
+          contact: session.customer_phone,
+        },
         notes: session.notes,
         theme: {
           color: "#2563EB",
         },
         handler(response: PaymentSuccessResponse) {
           resolve(response);
-          router.push(`/payment/success?orderId=${session.orderId}`);
+          router.push(`/payment/success?orderId=${session.razorpay_order_id}`);
         },
         modal: {
           ondismiss() {
@@ -89,19 +101,34 @@ const Checkout = () => {
   const handlePay = async () => {
     try {
       setIsLoading(true);
-
+      const checkoutPayload: ICreateOrder = {
+        currency: "INR",
+        shipping_address: shippingAddress,
+        products: products.map((product) => ({
+          product_id: product.id,
+          name: product.name,
+          quantity: 1,
+          unit_price: product.price,
+          total_price: product.price * 1,
+        })),
+      };
+      // create order in the backend and get the checkout session
       const { data } = await axios.post(
-        `${envConfig.baseApi}/payment/checkout`,
-        { ...demoOrderData },
+        `${envConfig.baseApi}/order`,
+        checkoutPayload,
       );
 
-      const checkoutSession: CheckoutSession = data.data;
+      const checkoutSession: IOrderResponse = data.data;
 
       const payment = await startCheckout(checkoutSession);
 
+      // verify the payment in the backend
+      setLoadingMessage("Verifying payment...");
       await axios.post(`${envConfig.baseApi}/payment/verify`, {
         ...payment,
       });
+
+      setLoadingMessage("Payment verified successfully.");
     } catch (error: any) {
       console.error(error);
 
@@ -115,9 +142,9 @@ const Checkout = () => {
     <button
       onClick={handlePay}
       disabled={isLoading}
-      className="rounded-md bg-blue-600 px-5 py-2 text-white disabled:cursor-not-allowed disabled:opacity-60"
+      className="w-full rounded-md bg-blue-600 px-5 py-2 text-white disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer transition hover:bg-blue-700"
     >
-      {isLoading ? "Processing..." : "Pay Now"}
+      {isLoading ? loadingMessage : "Proceed to Payment"}
     </button>
   );
 };

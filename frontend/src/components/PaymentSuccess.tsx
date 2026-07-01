@@ -1,10 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { useEffect, useState } from "react";
 import axios from "axios";
-
 import { envConfig } from "@/config/env";
 import { useRouter } from "next/router";
+import Link from "next/link";
 
 export default function PaymentSuccess() {
   const { query } = useRouter();
@@ -73,6 +71,14 @@ export default function PaymentSuccess() {
           label="Created At"
           value={new Date(payment.createdAt).toLocaleString()}
         />
+      </div>
+      <div className="mt-6 text-center">
+        <Link
+          href="/"
+          className="mt-6 inline-block rounded-lg bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700"
+        >
+          Continue Shopping
+        </Link>
       </div>
     </main>
   );
